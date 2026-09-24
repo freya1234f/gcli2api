@@ -290,6 +290,25 @@ def build_text_chunk_from_synthetic(
 
 
 
+_THINKING_END_RE = re.compile(r"</thinking>(?:\s*<!--\s*End of The ECoT\s*-->)?", re.IGNORECASE)
+
+
+def keep_preset_thinking(side_text: str) -> str:
+    """从被丢弃的工具外文本里捞出预设思维链（<thinking>...</thinking>，可带 ECoT 结束标记）。
+
+    没有完整闭合的 </thinking> 就不留，照旧整段丢弃，避免把正文拼两遍。
+    """
+    start = side_text.lower().find("<thinking")
+    if start == -1:
+        return ""
+    last = None
+    for m in _THINKING_END_RE.finditer(side_text, start):
+        last = m
+    if last is None:
+        return ""
+    return side_text[start:last.end()].strip()
+
+
 # ==================== 流式处理器 ====================
 
 
@@ -448,10 +467,14 @@ class AntiTruncationStreamProcessor:
                         if chunk_has_synthetic:
                             found_synthetic = True
                             # 防拼接：丢弃之前暂存的普通文本
+                            # （但预设写在工具外面的 <thinking> 思维链要留下，拼在正文前面）
+                            kept_thinking = ""
                             if side_buffer.getvalue():
+                                kept_thinking = keep_preset_thinking(side_buffer.getvalue())
                                 print(
                                     "Anti-truncation: Discarding side-buffered text "
-                                    "(content conflict with synthetic tool)",
+                                    "(content conflict with synthetic tool)"
+                                    + (f", kept thinking ({len(kept_thinking)} chars)" if kept_thinking else ""),
                                     flush=True,
                                 )
                                 side_buffer.close()
@@ -459,6 +482,8 @@ class AntiTruncationStreamProcessor:
 
                             # 收集内容用于续传
                             self._append_content(synthetic_content)
+                            if kept_thinking:
+                                synthetic_content = kept_thinking + "\n\n" + synthetic_content
 
                             # 构建替换后的 chunk
                             modified_data = build_text_chunk_from_synthetic(
