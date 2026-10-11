@@ -738,6 +738,13 @@ async def normalize_antigravity_request(
         "gemini-3.6-flash",
         "gemini-3.7-flash",
         "gemini-3.8-flash",
+        # 2026-10-11 起上游对这些也返回 400 "Requests ending with a model turn are not supported."
+        # 实测 400：3.1-pro-low / 3.1-pro-high / 3-flash / 2.5-flash；3.5-flash-low、3.1-flash-lite 仍可预填
+        # 2.5-pro 当天无容量没测到，按 2.5-flash 一并处理
+        "gemini-3.1-pro",
+        "gemini-3-flash",
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
     ]
     if any(keyword in model.lower() for keyword in no_prefill_models):
         contents = result.get("contents", [])
